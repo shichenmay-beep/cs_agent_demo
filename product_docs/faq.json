@@ -1,0 +1,22 @@
+{
+  "product_name": "Example Product (Shopify/Amazon)",
+  "faqs": [
+    {
+      "topic": "Returns & Refunds",
+      "content": "We accept returns within 30 days of delivery. Customer must initiate return from order page. Refunds are processed within 5-7 business days after we receive the item."
+    },
+    {
+      "topic": "Shipping",
+      "content": "Standard shipping: 5-7 business days. Express: 2-3 business days. We ship from US warehouses for US orders."
+    },
+    {
+      "topic": "Wrong item / Defective",
+      "content": "If you received wrong item or defective product, please reply with your order ID and photos. We will send replacement or full refund at no extra cost."
+    },
+    {
+      "topic": "Account & Login",
+      "content": "Password reset: use 'Forgot password' on login page. For account merge or access issues, provide registered email and we will verify identity."
+    }
+  ],
+  "tone": "Professional, friendly, and concise. Reply in English for US customers. Avoid jargon; use simple sentences."
+}

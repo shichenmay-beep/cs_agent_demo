@@ -1,0 +1,11 @@
+# Exclude from Zendesk app package (zcli apps:package)
+deploy-on-vm.sh
+deploy-full-to-vm.sh
+package-zendesk-app.sh
+upload-env-to-vm.sh
+open-firewall-3000.sh
+open-firewall-80-443.sh
+setup-https-on-vm.sh
+backend/
+rag/
+tmp/

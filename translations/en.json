@@ -1,0 +1,14 @@
+{
+  "app": {
+    "name": "CS Agent - Priority & Reply",
+    "short_description": "Priority evaluation and AI reply suggestion for tickets.",
+    "long_description": "Sidebar app: evaluates ticket priority (P0–P3), translates last message, summarizes ticket, suggests reply. Fill reply box or one-click send.",
+    "installation_instructions": "Install the app, then set **backend_url** to your backend API base URL (e.g. https://your-backend.com). Ensure the backend is running and reachable from Zendesk."
+  },
+  "parameters": {
+    "backend_url": {
+      "label": "Backend URL",
+      "helpText": "Base URL of the CS Agent backend (e.g. https://your-server.com). Must be HTTPS in production."
+    }
+  }
+}

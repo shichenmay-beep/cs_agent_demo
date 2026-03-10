@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CS Agent</title>
+  <script src="https://static.zdassets.com/zendesk_app_framework_sdk/2.0/zaf_sdk.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fa;
+      --card: #fff;
+      --border: #e1e4e8;
+      --text: #24292f;
+      --text-muted: #57606a;
+      --critical: #7f1d1d;
+      --critical-bg: #fee2e2;
+      --high: #b91c1c;
+      --high-bg: #fef2f2;
+      --medium: #b45309;
+      --medium-bg: #fffbeb;
+      --low: #15803d;
+      --low-bg: #f0fdf4;
+      --primary: #0969da;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; overflow-y: auto; overflow-x: hidden; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; padding: 10px; background: var(--bg); color: var(--text); line-height: 1.4; min-width: 260px; }
+    h2 { font-size: 12px; font-weight: 600; margin: 0 0 6px; color: var(--text-muted); }
+    .section { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+    .section.reply-section { padding: 12px; margin-bottom: 12px; }
+    .priority-bar { margin: -10px -10px 10px -10px; padding: 10px 12px; border-radius: 0 0 8px 8px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .priority-bar.priority-critical { background: var(--critical-bg); color: var(--critical); border-left: 4px solid var(--critical); }
+    .priority-bar.priority-high { background: var(--high-bg); color: var(--high); border-left: 4px solid var(--high); }
+    .priority-bar.priority-medium { background: var(--medium-bg); color: var(--medium); border-left: 4px solid var(--medium); }
+    .priority-bar.priority-low { background: var(--low-bg); color: var(--low); border-left: 4px solid var(--low); }
+    .priority-bar .icon { font-size: 16px; }
+    .priority-bar .reason { font-size: 11px; font-weight: 500; opacity: 0.9; margin-left: 4px; }
+    button { background: var(--primary); color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; resize: vertical; }
+    #reply-text { min-height: 220px; }
+    .actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .loading { color: var(--text-muted); font-size: 12px; }
+    .error { color: var(--high); font-size: 11px; margin-top: 4px; }
+    .original-text { background: #f0f2f5; padding: 6px 8px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 96px; overflow-y: auto; }
+    .summary-box { background: #f0f2f5; padding: 8px 10px; border-radius: 4px; font-size: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+    .summary-box:not(.collapsible-text) { max-height: 180px; overflow-y: auto; }
+    .summary-box.collapsible-text { max-height: 4.5em; overflow: hidden; }
+    .summary-box.collapsible-text.expanded { max-height: none; overflow-y: auto; }
+    .translation-text { background: #e8f4ea; padding: 6px 8px; border-radius: 4px; font-size: 11px; margin-top: 4px; white-space: pre-wrap; word-break: break-word; border-left: 3px solid #22c55e; }
+    .translation-label { font-weight: 600; color: var(--text-muted); font-size: 10px; margin-top: 4px; margin-bottom: 2px; }
+    .last-msg { background: #f8fafc; padding: 6px 8px; border-radius: 4px; font-size: 12px; white-space: pre-wrap; word-break: break-word; border-left: 3px solid var(--primary); }
+    .collapsible-text { max-height: 4.5em; overflow: hidden; transition: max-height 0.2s ease; }
+    .collapsible-text.expanded { max-height: none; }
+    .expand-toggle { font-size: 11px; color: var(--primary); cursor: pointer; margin-top: 4px; display: inline-block; background: none; border: none; padding: 0; }
+    .last-msg-label { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; }
+    label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+    select { width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; margin-bottom: 6px; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    #custom-instruction { min-height: 36px; font-size: 12px; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge--critical { background: var(--critical-bg); color: var(--critical); }
+    .badge--high { background: var(--high-bg); color: var(--high); }
+    .badge--medium { background: var(--medium-bg); color: var(--medium); }
+    .badge--low { background: var(--low-bg); color: var(--low); }
+    .muted { color: var(--text-muted); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <p class="muted" style="font-size:10px; margin:0 0 6px;">优先级、翻译、工单总结：打开即自动请求；建议回复：需点击「生成建议回复」</p>
+  <div id="priority-bar-wrap"></div>
+  <div id="priority-error" class="error" style="display:none;"></div>
+
+  <div class="section">
+    <div class="last-msg-label"><span id="ticket-id-prefix"></span>用户最后一条会话</div>
+    <div id="last-customer-msg" class="last-msg">加载中…</div>
+    <button type="button" class="expand-toggle" id="last-msg-expand" style="display:none">展开</button>
+    <div class="translation-label" style="margin-top:6px;">翻译</div>
+    <div id="last-msg-translation" class="translation-text"></div>
+    <button type="button" class="expand-toggle" id="last-msg-translation-expand" style="display:none">展开</button>
+  </div>
+
+  <div class="section reply-section">
+    <h2>建议回复</h2>
+    <button id="btn-reply">生成回复</button>
+    <div id="reply-area" style="display:none; margin-top:10px;">
+      <textarea id="reply-text" placeholder="建议回复将显示在此…"></textarea>
+      <div class="actions">
+        <button id="btn-oneclick-send" class="secondary" style="background:#b91c1c; color:#fff;">一键发送</button>
+        <button id="btn-use-send">填入回复框</button>
+      </div>
+      <p class="muted" style="font-size:10px; margin-top:6px; color:var(--medium);">「一键发送」= 直接发公开回复；「填入回复框」= 仅填入，可在 Zendesk 中编辑后再点提交。</p>
+    </div>
+    <div id="reply-error" class="error"></div>
+  </div>
+
+  <div class="section">
+    <h2>工单总结和回复要点</h2>
+    <p class="muted" style="font-size:11px; margin:0 0 4px;">按客服偏好语言显示</p>
+    <div class="summary-label" style="font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px;">工单总结</div>
+    <div id="ticket-summary" class="summary-box"></div>
+    <div class="summary-label" style="font-size:11px; font-weight:600; color:var(--text-muted); margin:8px 0 4px;">建议回复直译（客服偏好语言）</div>
+    <div id="reply-points-translation" class="summary-box" style="min-height:40px; font-style:italic; color:var(--text-muted);">生成回复后将显示此处</div>
+    <button type="button" class="expand-toggle" id="reply-points-translation-expand" style="display:none">展开</button>
+    <div class="summary-label" style="font-size:11px; font-weight:600; color:var(--text-muted); margin:8px 0 4px;">回复要点</div>
+    <div id="reply-points" class="summary-box"></div>
+  </div>
+
+  <div class="section">
+    <h2>回复修改建议</h2>
+    <label>提示词（可修改以调整语气、语言或政策侧重）</label>
+    <textarea id="ai-prompt" placeholder="如：用英文专业回复；强调30天退换政策；日文工单用日语回复…" rows="3" style="min-height:56px; font-size:12px;"></textarea>
+  </div>
+
+  <div class="section">
+    <h2>客服偏好语言</h2>
+    <label>偏好语言（用于最后一条会话翻译、工单总结与回复要点，默认中文）</label>
+    <select id="agent-lang" style="max-width:140px;"><option value="zh" selected>中文</option><option value="en">English</option><option value="ja">日本語</option></select>
+  </div>
+
+  <script>
+    (function() {
+      var client = ZAFClient.init();
+      // 请求侧栏更大显示区域，减少滚动（宽度由 Zendesk 与用户拖动决定，高度可请求）
+      client.invoke('resize', { width: '100%', height: '680px' }).catch(function() {});
+
+      function backendUrl() {
+        return client.metadata().then(function(meta) {
+          return (meta.settings && meta.settings.backend_url) || 'http://localhost:3000';
+        });
+      }
+
+      function getTicketContext() {
+        return client.get([
+          'ticket.id',
+          'ticket.subject',
+          'ticket.description',
+          'ticket.requester.id',
+          'ticket.requester.name',
+          'ticket.requester.email',
+          'ticket.tags'
+        ]).then(function(data) {
+          return {
+            ticketId: data['ticket.id'],
+            subject: data['ticket.subject'],
+            description: data['ticket.description'] || '',
+            requesterId: data['ticket.requester.id'],
+            requesterName: data['ticket.requester.name'],
+            requesterEmail: data['ticket.requester.email'],
+            tags: Array.isArray(data['ticket.tags']) ? data['ticket.tags'] : []
+          };
+        });
+      }
+
+      var lastMsgText = '';
+
+      /** 将 HTML 实体解码为普通字符，避免 &nbsp; 等原样显示 */
+      function decodeHtmlEntities(str) {
+        if (!str || typeof str !== 'string') return str || '';
+        var d = document.createElement('div');
+        d.innerHTML = str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return d.textContent || str;
+      }
+
+      /** 根据用户最后一条消息简单判断客户使用语言，用于建议回复必须与用户同语言 */
+      function detectCustomerLanguage(text) {
+        if (!text || !text.trim()) return 'en';
+        var t = text.trim();
+        if (/[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(t)) {
+          if (/[\u3040-\u309f\u30a0-\u30ff]/.test(t)) return 'ja';
+          return 'zh';
+        }
+        return 'en';
+      }
+
+      var COLLAPSE_THRESHOLD = 200;
+      function setupCollapsible(contentId, toggleId) {
+        var el = document.getElementById(contentId);
+        var btn = document.getElementById(toggleId);
+        if (!el || !btn) return;
+        var text = (el.textContent || '').trim();
+        if (text.length > COLLAPSE_THRESHOLD) {
+          el.classList.add('collapsible-text');
+          el.classList.remove('expanded');
+          btn.textContent = '展开';
+          btn.style.display = 'inline-block';
+        } else {
+          el.classList.remove('collapsible-text');
+          el.classList.add('expanded');
+          btn.style.display = 'none';
+        }
+      }
+      function bindExpandToggle(contentId, toggleId) {
+        var el = document.getElementById(contentId);
+        var btn = document.getElementById(toggleId);
+        if (!btn) return;
+        btn.onclick = function() {
+          if (el.classList.contains('expanded')) {
+            el.classList.remove('expanded');
+            btn.textContent = '展开';
+          } else {
+            el.classList.add('expanded');
+            btn.textContent = '收起';
+          }
+        };
+      }
+      bindExpandToggle('last-customer-msg', 'last-msg-expand');
+      bindExpandToggle('last-msg-translation', 'last-msg-translation-expand');
+      bindExpandToggle('reply-points-translation', 'reply-points-translation-expand');
+
+      function doLastMsgTranslate() {
+        var text = lastMsgText.trim();
+        var el = document.getElementById('last-msg-translation');
+        if (!text) { el.textContent = ''; return; }
+        el.textContent = '翻译中…';
+        var lang = document.getElementById('agent-lang').value;
+        backendUrl().then(function(base) {
+          return fetch(base + '/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, targetLang: lang }) });
+        }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(data) {
+          var t = (data && data.translation) ? data.translation : '（暂不可用）';
+          document.getElementById('last-msg-translation').textContent = t;
+          setupCollapsible('last-msg-translation', 'last-msg-translation-expand');
+        }).catch(function() {
+          document.getElementById('last-msg-translation').textContent = '（重试）';
+          setupCollapsible('last-msg-translation', 'last-msg-translation-expand');
+        });
+      }
+
+      function refreshTicketSummary() {
+        var summaryEl = document.getElementById('ticket-summary');
+        var pointsEl = document.getElementById('reply-points');
+        Promise.all([getTicketContext(), getTicketComments()]).then(function(args) {
+          var ctx = args[0];
+          var comments = (args[1] || []).map(function(c) { return (c.public ? 'Customer: ' : 'Agent: ') + (c.plain_body || c.body || '').substring(0, 300); }).join('\n---\n');
+          var raw = (ctx.subject || '') + (ctx.description ? '\n\n' + ctx.description : '');
+          if (!raw.trim()) { summaryEl.textContent = '（无内容）'; pointsEl.textContent = ''; return; }
+          summaryEl.textContent = '总结中…';
+          pointsEl.textContent = '';
+          var lang = document.getElementById('agent-lang').value;
+          backendUrl().then(function(base) {
+            return fetch(base + '/summarize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject: ctx.subject, description: ctx.description, conversationHistory: comments, lang: lang }) });
+          }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(data) {
+            summaryEl.textContent = (data && data.summary) ? data.summary : raw.substring(0, 200);
+            pointsEl.textContent = (data && data.replyPoints) ? data.replyPoints : '';
+          }).catch(function() { summaryEl.textContent = '工单总结请求失败，请检查 Backend URL。'; pointsEl.textContent = ''; });
+        });
+      }
+      refreshTicketSummary();
+      client.on('ticket.updated', refreshTicketSummary);
+      document.getElementById('agent-lang').onchange = function() { doLastMsgTranslate(); refreshTicketSummary(); runEvaluatePriority(); };
+
+      function renderPriorityBar(priority, reason) {
+        var wrap = document.getElementById('priority-bar-wrap');
+        var p = (priority || '').toLowerCase().replace(/^p/, '');
+        var map = { 0: { cls: 'priority-critical', icon: '◆', label: 'P0 紧急' }, 1: { cls: 'priority-high', icon: '◆', label: 'P1 高' }, 2: { cls: 'priority-medium', icon: '◇', label: 'P2 中' }, 3: { cls: 'priority-low', icon: '●', label: 'P3 低' }, critical: { cls: 'priority-critical', icon: '◆', label: '紧急' }, high: { cls: 'priority-high', icon: '◆', label: '高' }, medium: { cls: 'priority-medium', icon: '◇', label: '中' }, low: { cls: 'priority-low', icon: '●', label: '低' } };
+        var m = map[p] || map['2'] || map.medium;
+        if (!priority) {
+          wrap.innerHTML = '<div class="priority-bar priority-medium" style="opacity:0.85"><span class="icon">◇</span><span>未评估</span></div>';
+          return;
+        }
+        if (priority === 'loading') {
+          wrap.innerHTML = '<div class="priority-bar priority-medium" style="opacity:0.9"><span class="icon">◇</span><span>评估中…</span><span class="reason">大模型处理中，请稍候。</span></div>';
+          return;
+        }
+        wrap.innerHTML = '<div class="priority-bar ' + m.cls + '"><span class="icon">' + m.icon + '</span><span>' + m.label + '</span><span class="reason">' + (reason ? reason : '') + '</span></div>';
+      }
+      renderPriorityBar(null);
+
+      function refreshLastCustomerMsg() {
+        var el = document.getElementById('last-customer-msg');
+        var prefixEl = document.getElementById('ticket-id-prefix');
+        Promise.all([getTicketContext(), getTicketComments()]).then(function(args) {
+          var ctx = args[0];
+          if (prefixEl && ctx.ticketId) prefixEl.textContent = '#' + ctx.ticketId + ' ';
+          var comments = args[1] || [];
+          var requesterId = ctx.requesterId;
+          var lastFromCustomer = '';
+          for (var i = comments.length - 1; i >= 0; i--) {
+            var c = comments[i];
+            if (c.public && c.author_id === requesterId) { lastFromCustomer = (c.plain_body || c.body || '').trim(); break; }
+          }
+          if (!lastFromCustomer) lastFromCustomer = (ctx.subject || '') + (ctx.description ? '\n' + ctx.description : '');
+          lastMsgText = decodeHtmlEntities(lastFromCustomer || '') || '';
+          el.textContent = lastMsgText || '（无）';
+          setupCollapsible('last-customer-msg', 'last-msg-expand');
+          doLastMsgTranslate();
+        }).catch(function() { el.textContent = '（加载失败）'; document.getElementById('last-msg-expand').style.display = 'none'; });
+      }
+      refreshLastCustomerMsg();
+      client.on('ticket.updated', refreshLastCustomerMsg);
+
+      function getTicketComments() {
+        return client.get('ticket.id').then(function(data) {
+          var tid = data['ticket.id'];
+          return client.request({
+            url: '/api/v2/tickets/' + tid + '/comments.json',
+            type: 'GET',
+            cors: false
+          }).then(function(res) {
+            if (res && res.comments) return res.comments;
+            return [];
+          }).catch(function() { return []; });
+        });
+      }
+
+      function runEvaluatePriority() {
+        var errEl = document.getElementById('priority-error');
+        if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+        renderPriorityBar('loading');
+        var lang = document.getElementById('agent-lang').value;
+        getTicketContext().then(function(ctx) {
+          return backendUrl().then(function(base) {
+            return fetch(base + '/evaluate-priority', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subject: ctx.subject, description: ctx.description, requesterEmail: ctx.requesterEmail, tags: ctx.tags, lang: lang }) });
+          });
+        }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(data) {
+          if (data && data.priority) renderPriorityBar(data.priority, data.reason || '');
+          else renderPriorityBar(null);
+        }).catch(function(e) {
+          renderPriorityBar(null);
+          if (errEl) { errEl.textContent = '优先级请求失败，请检查 Backend URL 与网络'; errEl.style.display = 'block'; }
+        });
+      }
+      runEvaluatePriority();
+
+      // ---------- Reply ----------
+      document.getElementById('btn-reply').onclick = function() {
+        var replyArea = document.getElementById('reply-area');
+        var replyText = document.getElementById('reply-text');
+        var errEl = document.getElementById('reply-error');
+        var btn = document.getElementById('btn-reply');
+        errEl.textContent = '';
+        btn.disabled = true;
+        replyText.value = '';
+
+        Promise.all([backendUrl(), getTicketContext(), getTicketComments()]).then(function(args) {
+          var base = args[0];
+          var ctx = args[1];
+          var comments = args[2];
+          var history = (comments || []).map(function(c) {
+            return (c.public ? 'Customer: ' : 'Agent: ') + (c.plain_body || c.body || '').substring(0, 500);
+          }).join('\n---\n');
+          var customerLang = detectCustomerLanguage(lastMsgText);
+          return fetch(base + '/suggest-reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subject: ctx.subject,
+              description: ctx.description,
+              requesterName: ctx.requesterName,
+              tags: ctx.tags || [],
+              conversationHistory: history,
+              customInstruction: document.getElementById('ai-prompt').value,
+              customerLanguage: customerLang
+            })
+          });
+        }).then(function(r) {
+          if (!r.ok) throw new Error('Request failed: ' + r.status);
+          return r.json();
+        }).then(function(data) {
+          var reply = (data.reply || data.reply_text || '').trim();
+          replyText.value = reply;
+          replyArea.style.display = 'block';
+          var transEl = document.getElementById('reply-points-translation');
+          if (reply && transEl) {
+            transEl.textContent = '直译中…';
+            var agentLang = document.getElementById('agent-lang').value;
+            backendUrl().then(function(base) {
+              return fetch(base + '/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: reply, targetLang: agentLang }) });
+            }).then(function(r) { return r && r.ok ? r.json() : null;             }).then(function(tData) {
+              transEl.textContent = (tData && tData.translation) ? tData.translation : reply;
+              transEl.style.fontStyle = 'normal';
+              transEl.style.color = '';
+              setupCollapsible('reply-points-translation', 'reply-points-translation-expand');
+            }).catch(function() {
+              transEl.textContent = reply;
+              transEl.style.fontStyle = 'normal';
+              transEl.style.color = '';
+              setupCollapsible('reply-points-translation', 'reply-points-translation-expand');
+            });
+          }
+        }).catch(function(e) {
+          errEl.textContent = e.message || 'Failed to generate reply. Is the backend running?';
+        }).finally(function() {
+          btn.disabled = false;
+        });
+      };
+
+      // 一键发送：直接调用 Zendesk API 提交公开回复，客户会收到；需二次确认防误触。
+      document.getElementById('btn-oneclick-send').onclick = function() {
+        var text = document.getElementById('reply-text').value.trim();
+        if (!text) return;
+        var preview = text.length > 200 ? text.substring(0, 200) + '…' : text;
+        if (!confirm('将直接作为公开回复发送给客户，发送后无法撤回。\n\n确定发送？\n\n---\n' + preview)) return;
+        var errEl = document.getElementById('reply-error');
+        var btn = document.getElementById('btn-oneclick-send');
+        errEl.textContent = '';
+        btn.disabled = true;
+        getTicketContext().then(function(ctx) {
+          var tid = ctx.ticketId;
+          if (!tid) throw new Error('无法获取工单 ID');
+          return client.request({
+            url: '/api/v2/tickets/' + tid + '.json',
+            type: 'PUT',
+            contentType: 'application/json',
+            data: JSON.stringify({ ticket: { comment: { body: text, public: true } } })
+          });
+        }).then(function() {
+          document.getElementById('reply-area').style.display = 'none';
+          document.getElementById('reply-text').value = '';
+          errEl.textContent = '';
+          errEl.style.color = 'var(--low)';
+          errEl.textContent = '已发送。';
+          setTimeout(function() { errEl.textContent = ''; errEl.style.color = ''; }, 3000);
+        }).catch(function(e) {
+          var msg = (e && e.message) ? e.message : (e && e.responseJSON && e.responseJSON.error) ? (typeof e.responseJSON.error === 'string' ? e.responseJSON.error : JSON.stringify(e.responseJSON.error)) : 'unknown';
+          errEl.textContent = '发送失败: ' + msg;
+        }).finally(function() {
+          btn.disabled = false;
+        });
+      };
+
+      // 仅调用 comment.appendText 填入回复框，不提交；客服可在 Zendesk 中编辑后再点提交。
+      document.getElementById('btn-use-send').onclick = function() {
+        var text = document.getElementById('reply-text').value.trim();
+        if (!text) return;
+        if (!confirm('将把建议回复填入 Zendesk 回复框，您可在其中编辑后再点提交。\n\n是否继续填入？')) return;
+        client.invoke('comment.appendText', text).then(function() {
+          document.getElementById('reply-area').style.display = 'none';
+          document.getElementById('reply-text').value = '';
+          document.getElementById('reply-error').textContent = '';
+        }).catch(function(e) {
+          document.getElementById('reply-error').textContent = '填入失败: ' + (e && e.message ? e.message : 'unknown');
+        });
+      };
+    })();
+  </script>
+</body>
+</html>

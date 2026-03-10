@@ -1,0 +1,5 @@
+{
+  "_comment": "工单服务评分：key 为 ticket_id（字符串），value 为 good 或 bad。复制为 ticket_ratings.json 后填写，process_data.py 会写入 ChromaDB；检索时优先参考 good 的工单。",
+  "123": "good",
+  "456": "bad"
+}

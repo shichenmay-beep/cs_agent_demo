@@ -1,0 +1,58 @@
+# 如何更新已安装的 Zendesk App
+
+代码改完后（例如改了 `assets/iframe.html`、`manifest.json` 等），按下面步骤更新 Zendesk 里已安装的 App，**无需卸载重装**，安装时填的 Backend URL 等会保留。
+
+---
+
+## 1. 本机重新打包
+
+在项目根目录执行（需已安装 [Zendesk ZCLI](https://developer.zendesk.com/documentation/apps/app-developer-guide/zcli/) 并 `zcli login` 或配置好环境变量）：
+
+```bash
+cd /Users/shichen/data_sync/cs_agent_demo
+zcli apps:package
+```
+
+成功后会在 `tmp/` 下生成一个 zip，例如 `tmp/app-xxxxxxxx.zip`。记下路径，或直接到 `tmp/` 里找最新的 zip。
+
+---
+
+## 2. 在 Zendesk 里上传新版本
+
+1. 打开 **Admin Center**：  
+   `https://你的子域名.zendesk.com/admin`（例如 `https://rymindinc.zendesk.com/admin`）
+2. 左侧点 **Apps and integrations** → **Apps**。
+3. 切到 **Zendesk Support apps**（或你当时安装时所在的分类）。
+4. 找到你安装的 **CS Agent** 类 App（名称可能是 "Comulytic AI Assistant" 或 "CS Agent - Priority & Reply"），点进去。
+5. 在应用详情/管理页里找 **「Update」（更新）** 或 **「Upload new version」（上传新版本）** 或 **三个点菜单里的「Update app」**，点击。
+6. 选择刚才打包的 zip（`cs_agent_demo/tmp/app-xxxxxxxx.zip`），上传。
+7. 上传完成后，Zendesk 会使用新包替换当前版本；**Backend URL、Title 等安装时填的参数一般不会变**，无需重填（除非你主动去改）。
+
+---
+
+## 3. 验证
+
+打开任意一条工单，刷新或重新打开侧栏，确认侧栏表现已是新版本（例如新文案、新逻辑）。
+
+---
+
+## 若没有看到「Update」按钮
+
+部分 Zendesk 界面可能是：
+
+- 在应用卡片上点 **齿轮/设置** → 选 **Update app** 或 **Replace**；
+- 或：**Apps** 列表里该应用右侧 **⋯** → **Update**。
+
+若你的后台是「上传私有应用」入口而不是已安装应用列表，可以再次走 **Upload private app**，选择新 zip；若提示「已存在同名/同 ID 应用」，通常会问是否**覆盖/更新**，选覆盖即可。
+
+---
+
+## 小结
+
+| 步骤 | 操作 |
+|------|------|
+| 1 | 本机 `cd cs_agent_demo && zcli apps:package`，得到 `tmp/app-xxx.zip` |
+| 2 | Admin Center → Apps and integrations → Apps → 找到该 App → Update / 上传新版本 → 选新 zip |
+| 3 | 工单里刷新侧栏验证 |
+
+只更新了**前端/侧栏**（iframe、manifest 等）时，只做以上步骤即可；**后端**（VM 上的 Node）需单独用 `deploy-full-to-vm.sh` 或 `upload-env-to-vm.sh` 等流程更新。

@@ -1,0 +1,5 @@
+# 本地默认 key，勿提交真实密钥
+backend/config.json
+backend/.env
+# 工单评分（可自建，参考 ticket_ratings.json.example）
+rag/ticket_ratings.json
