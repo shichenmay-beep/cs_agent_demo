@@ -59,6 +59,7 @@ app.get('/llm-check', async (req, res) => {
 });
 
 const PRODUCT_DOCS_PATH = path.join(__dirname, '..', 'product_docs', 'faq.json');
+const PRODUCT_DOCS_FALLBACK_PATH = path.join(__dirname, 'faq.json');
 const PROMPTS_PATH = path.join(__dirname, '..', 'product_docs', 'prompts.json');
 const PROMPTS_FALLBACK_PATH = path.join(__dirname, 'prompts.json');
 const CONFIG_DEFAULT_PATH = path.join(__dirname, 'config.default.json');
@@ -124,12 +125,14 @@ function truncateConversationTail(text, maxChars) {
 }
 
 function loadProductDocs() {
-  try {
-    const raw = fs.readFileSync(PRODUCT_DOCS_PATH, 'utf8');
-    return JSON.parse(raw);
-  } catch (e) {
-    return { faqs: [], tone: 'Professional, friendly. Reply in English.' };
+  const tryPath = fs.existsSync(PRODUCT_DOCS_PATH) ? PRODUCT_DOCS_PATH : (fs.existsSync(PRODUCT_DOCS_FALLBACK_PATH) ? PRODUCT_DOCS_FALLBACK_PATH : null);
+  if (tryPath) {
+    try {
+      const raw = fs.readFileSync(tryPath, 'utf8');
+      return JSON.parse(raw);
+    } catch (e) { /* fall through */ }
   }
+  return { faqs: [], tone: 'Professional, friendly. Reply in English.' };
 }
 
 function loadPrompts() {
