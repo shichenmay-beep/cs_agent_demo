@@ -47,13 +47,23 @@ async function main() {
   console.log('BASE_URL:', BASE_URL);
   console.log('预期：传 lang/targetLang=zh 时，reason、translation、summary、replyPoints 均应为中文\n');
 
-  // 1. 健康检查
+  // 1. 健康检查 + 大模型配置与可用性
   try {
     const health = await fetch(BASE_URL + '/health').then(r => r.json()).catch(() => null);
     if (!health || !health.ok) {
       console.log('⚠ /health 失败，请确认后端已启动或 BASE_URL 正确\n');
     } else {
       console.log('✓ /health OK, version:', health.version || '-');
+      if (health.llm) {
+        console.log('  llm.configured:', health.llm.configured, health.llm.model ? 'model=' + health.llm.model : '', 'baseURLSet:', health.llm.baseURLSet);
+      }
+    }
+    const llmCheck = await fetch(BASE_URL + '/llm-check').then(r => r.json()).catch(() => null);
+    if (llmCheck && llmCheck.ok) {
+      console.log('✓ /llm-check OK，大模型接口可用\n');
+    } else if (llmCheck && !llmCheck.ok) {
+      console.log('✗ /llm-check 失败:', llmCheck.error || llmCheck.status || 'unknown');
+      console.log('  未配置 key 或接口报错时会走 mock，翻译/总结会显示兜底中文。\n');
     }
   } catch (e) {
     console.log('⚠ /health 请求异常:', e.message, '\n');

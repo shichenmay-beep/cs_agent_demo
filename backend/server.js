@@ -18,14 +18,44 @@ app.use(cors());
 app.use(express.json());
 
 // 版本号：每次发版改这里，便于确认 Railway/VM 是否跑的是最新部署
-const BACKEND_VERSION = '1.0.4';
+const BACKEND_VERSION = '1.0.5';
 app.get('/health', (req, res) => {
+  const { apiKey, model, baseURL } = getOpenAIConfig();
   res.json({
     ok: true,
     service: 'cs-agent-backend',
     version: BACKEND_VERSION,
-    build: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'local'
+    build: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'local',
+    llm: {
+      configured: !!apiKey,
+      model: apiKey ? model : undefined,
+      baseURLSet: !!(baseURL && baseURL.trim())
+    }
   });
+});
+
+/** 探测大模型接口是否可用，用于排查「未调用成功」原因。不暴露 key。 */
+app.get('/llm-check', async (req, res) => {
+  const { apiKey, model, baseURL } = getOpenAIConfig();
+  if (!apiKey) {
+    return res.json({ ok: false, error: 'OPENAI_API_KEY not set (env or config)' });
+  }
+  try {
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey, ...(baseURL && { baseURL }) });
+    await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+      temperature: 0,
+      max_tokens: 10
+    });
+    res.json({ ok: true, model });
+  } catch (e) {
+    const status = e.status || e.statusCode || (e.error && e.error.code);
+    const message = (e.error && (e.error.message || e.error.error)) || e.message;
+    console.warn('[llm-check]', e.message, 'status=' + status);
+    res.json({ ok: false, error: message || e.message, status: status || null });
+  }
 });
 
 const PRODUCT_DOCS_PATH = path.join(__dirname, '..', 'product_docs', 'faq.json');
@@ -264,7 +294,9 @@ ${instruction}`;
       return { priority: valid.includes(p) ? p : 'P2', reason };
     }
   } catch (e) {
-    console.warn('LLM priority error:', e.message);
+    const status = e.status || e.statusCode || (e.error && e.error.code);
+    const detail = e.error && (e.error.message || e.error.error);
+    console.warn('[priority] LLM error:', e.message, 'status=' + status, detail ? 'detail=' + String(detail).slice(0, 120) : '');
   }
   return mockPriority(body);
 }
@@ -367,7 +399,9 @@ ${conversationHistory}`;
     const text = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
     if (text) return { reply: text.trim() };
   } catch (e) {
-    console.warn('LLM reply error:', e.message);
+    const status = e.status || e.statusCode || (e.error && e.error.code);
+    const detail = e.error && (e.error.message || e.error.error);
+    console.warn('[suggest-reply] LLM error:', e.message, 'status=' + status, detail ? 'detail=' + String(detail).slice(0, 120) : '');
   }
   return { reply: mockReply(body) };
 }
@@ -452,7 +486,9 @@ async function translateWithLLM(body) {
       return { translation };
     }
   } catch (e) {
-    console.warn('Translate error:', e.message);
+    const status = e.status || e.statusCode || (e.error && e.error.code);
+    const detail = e.error && (e.error.message || e.error.error);
+    console.warn('[translate] LLM error:', e.message, 'status=' + status, detail ? 'detail=' + String(detail).slice(0, 120) : '');
   }
   return mockTranslate(body);
 }
@@ -547,7 +583,9 @@ ${content}`;
       return { summary, replyPoints };
     }
   } catch (e) {
-    console.warn('Summarize error:', e.message);
+    const status = e.status || e.statusCode || (e.error && e.error.code);
+    const detail = e.error && (e.error.message || e.error.error);
+    console.warn('[summarize] LLM error:', e.message, 'status=' + status, detail ? 'detail=' + String(detail).slice(0, 120) : '');
   }
   return mockSummarize(body);
 }
