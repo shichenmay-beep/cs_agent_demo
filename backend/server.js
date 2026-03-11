@@ -193,13 +193,22 @@ function mockReply(body) {
 const REASON_LANG_MAP = { zh: '中文', en: 'English', ja: '日本語' };
 const DEFAULT_PRIORITY_INSTRUCTION = 'Use 4 levels: P0 = legal/very urgent/escalation; P1 = refund/defective/strong complaint; P2 = return/shipping/order query; P3 = general question.';
 
-/** 粗略判断文本是否主要为英文（用于语言兜底：当要求中文但模型仍输出英文时自动翻译） */
+/** 粗略判断文本是否主要为英文（用于语言兜底） */
 function isMostlyEnglish(text) {
   if (!text || typeof text !== 'string') return false;
   const t = text.replace(/\s/g, '');
   if (t.length < 2) return false;
   const asciiLetters = (t.match(/[A-Za-z]/g) || []).length;
   return asciiLetters / t.length > 0.5;
+}
+
+/** 粗略判断文本是否以中文/日文为主（CJK 字符占相当比例则视为已是目标语言，不再翻译） */
+function isMostlyCJK(text) {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.replace(/\s/g, '');
+  if (t.length < 1) return false;
+  const cjk = (t.match(/[\u4e00-\u9fff\u3040-\u30ff]/g) || []).length;
+  return cjk / t.length >= 0.25;
 }
 
 // Optional: call OpenAI for real priority
@@ -245,8 +254,8 @@ ${instruction}`;
       const p = (parsed.priority || 'P2').toString().toUpperCase();
       const valid = ['P0', 'P1', 'P2', 'P3'];
       let reason = (parsed.reason || '').trim();
-      // 语言兜底：要求中文但模型仍输出英文时，自动翻译为中文
-      if (body.lang === 'zh' && reason && isMostlyEnglish(reason)) {
+      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文
+      if (body.lang === 'zh' && reason && !isMostlyCJK(reason)) {
         try {
           const tr = await translateWithLLM({ text: reason, targetLang: 'zh' });
           if (tr && tr.translation) reason = tr.translation.trim();
@@ -423,6 +432,14 @@ async function translateWithLLM(body) {
       let translation = out.trim();
       // 去掉 LLM 可能返回的 [语言名] 前缀，避免界面显示「默认中文」
       translation = translation.replace(/^\[[^\]]+\]\s*/, '');
+      // 语言兜底：要求中文时若结果仍不是以中文为主，再翻译一次
+      if (body.targetLang === 'zh' && translation && !isMostlyCJK(translation)) {
+        try {
+          const retry = await translateWithLLM(body);
+          if (retry && retry.translation && isMostlyCJK(retry.translation))
+            translation = retry.translation.trim();
+        } catch (e) { /* 保留第一次结果 */ }
+      }
       return { translation };
     }
   } catch (e) {
@@ -491,15 +508,15 @@ ${content}`;
       const parsed = JSON.parse(out.replace(/[\s\S]*?(\{[\s\S]*\})[\s\S]*/, '$1'));
       let summary = (parsed.summary || '').trim();
       let replyPoints = (parsed.replyPoints || '').trim();
-      // 语言兜底：要求中文但模型仍输出英文时，自动翻译为中文
+      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文
       if (body.lang === 'zh') {
-        if (summary && isMostlyEnglish(summary)) {
+        if (summary && !isMostlyCJK(summary)) {
           try {
             const tr = await translateWithLLM({ text: summary, targetLang: 'zh' });
             if (tr && tr.translation) summary = tr.translation.trim();
           } catch (e) { /* 保留原文 */ }
         }
-        if (replyPoints && isMostlyEnglish(replyPoints)) {
+        if (replyPoints && !isMostlyCJK(replyPoints)) {
           try {
             const tr = await translateWithLLM({ text: replyPoints, targetLang: 'zh' });
             if (tr && tr.translation) replyPoints = tr.translation.trim();
