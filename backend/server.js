@@ -17,8 +17,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 版本号：每次发版改这里，便于确认 Railway/VM 是否跑的是最新部署
+const BACKEND_VERSION = '1.0.2';
 app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'cs-agent-backend' });
+  res.json({
+    ok: true,
+    service: 'cs-agent-backend',
+    version: BACKEND_VERSION,
+    build: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'local'
+  });
 });
 
 const PRODUCT_DOCS_PATH = path.join(__dirname, '..', 'product_docs', 'faq.json');

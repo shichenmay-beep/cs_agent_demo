@@ -67,7 +67,7 @@
   </style>
 </head>
 <body>
-  <p class="muted" style="font-size:10px; margin:0 0 6px;">优先级、翻译、工单总结、建议回复：打开即自动请求；在「回复修改建议」中填写提示词后点击「生成回复」可重新生成。<span id="app-version" style="float:right; opacity:0.7;" title="用于确认是否加载到最新包">v1.0.1</span></p>
+  <p class="muted" style="font-size:10px; margin:0 0 6px;">优先级、翻译、工单总结、建议回复：打开即自动请求；在「回复修改建议」中填写提示词后点击「生成回复」可重新生成。<span id="backend-version" style="margin-left:6px; opacity:0.8;" title="后端版本，用于确认部署是否生效">-</span><span id="app-version" style="float:right; opacity:0.7;" title="前端包版本，用于确认是否加载到最新包">v1.0.2</span></p>
   <div id="priority-bar-wrap"></div>
   <div id="priority-error" class="error" style="display:none;"></div>
 
@@ -129,6 +129,24 @@
           return (meta.settings && meta.settings.backend_url) || 'http://localhost:3000';
         });
       }
+
+      /** 拉取后端 /health 并在侧栏显示后端版本，便于确认部署是否生效 */
+      function refreshBackendVersion() {
+        backendUrl().then(function(base) {
+          fetch(base + '/health').then(function(r) { return r.ok ? r.json() : null; }).then(function(d) {
+            var el = document.getElementById('backend-version');
+            if (el && d && d.version) el.textContent = '后端 v' + d.version;
+            else if (el) el.textContent = '后端 未连接';
+          }).catch(function() {
+            var el = document.getElementById('backend-version');
+            if (el) el.textContent = '后端 未连接';
+          });
+        }).catch(function() {
+          var el = document.getElementById('backend-version');
+          if (el) el.textContent = '后端 未连接';
+        });
+      }
+      refreshBackendVersion();
 
       function getTicketContext() {
         return client.get([
