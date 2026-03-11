@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // 版本号：每次发版改这里，便于确认 Railway/VM 是否跑的是最新部署
-const BACKEND_VERSION = '1.0.2';
+const BACKEND_VERSION = '1.0.3';
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
