@@ -38,7 +38,7 @@ app.get('/health', (req, res) => {
 app.get('/llm-check', async (req, res) => {
   const { apiKey, model, baseURL } = getOpenAIConfig();
   if (!apiKey) {
-    return res.json({ ok: false, error: 'OPENAI_API_KEY not set (env or config)' });
+    return res.json({ ok: false, error: 'OPENAI_API_KEY or OPENROUTER_API_KEY not set (env or config)' });
   }
   try {
     const OpenAI = require('openai');
@@ -80,6 +80,7 @@ function loadDefaultConfig() {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
       const overrides = JSON.parse(raw);
       if (overrides.OPENAI_API_KEY !== undefined) config.OPENAI_API_KEY = overrides.OPENAI_API_KEY;
+      if (overrides.OPENROUTER_API_KEY !== undefined) config.OPENROUTER_API_KEY = overrides.OPENROUTER_API_KEY;
       if (overrides.OPENAI_MODEL !== undefined) config.OPENAI_MODEL = overrides.OPENAI_MODEL;
       if (overrides.OPENAI_API_BASE !== undefined) config.OPENAI_API_BASE = overrides.OPENAI_API_BASE;
     }
@@ -90,15 +91,20 @@ function loadDefaultConfig() {
   return config;
 }
 
-/** 优先使用环境变量（生产/RMS），没有则用 config 中的默认 key。支持 OpenRouter（baseURL）。 */
+/** 优先使用环境变量（生产/RMS），没有则用 config。与 OpenClaw 一致：支持 OPENAI_API_KEY 或 OPENROUTER_API_KEY，OpenRouter 时 baseUrl 为 https://openrouter.ai/api/v1。 */
 function getOpenAIConfig() {
-  const envKey = process.env.OPENAI_API_KEY;
-  const envModel = process.env.OPENAI_MODEL;
-  const envBase = process.env.OPENAI_API_BASE;
   const config = loadDefaultConfig();
-  const apiKey = (envKey || config.OPENAI_API_KEY || '').trim();
-  const model = (envModel || config.OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
-  const baseURL = (envBase || config.OPENAI_API_BASE || '').trim() || undefined;
+  const apiKey = (
+    process.env.OPENAI_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    config.OPENAI_API_KEY ||
+    config.OPENROUTER_API_KEY ||
+    ''
+  ).trim();
+  const model = (process.env.OPENAI_MODEL || config.OPENAI_MODEL || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
+  let baseURL = (process.env.OPENAI_API_BASE || config.OPENAI_API_BASE || '').trim() || undefined;
+  if (!baseURL && (apiKey.startsWith('sk-or-') || process.env.OPENROUTER_API_KEY || config.OPENROUTER_API_KEY))
+    baseURL = 'https://openrouter.ai/api/v1';
   return { apiKey, model, baseURL };
 }
 
@@ -284,7 +290,6 @@ ${instruction}`;
       const p = (parsed.priority || 'P2').toString().toUpperCase();
       const valid = ['P0', 'P1', 'P2', 'P3'];
       let reason = (parsed.reason || '').trim();
-      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文
       if (body.lang === 'zh' && reason && !isMostlyCJK(reason)) {
         try {
           const tr = await translateWithLLM({ text: reason, targetLang: 'zh' });
@@ -433,7 +438,6 @@ function mockTranslate(body) {
   const text = (body.text || '').trim();
   if (!text) return { translation: '' };
   const lang = body.targetLang || 'zh';
-  // 无 key 或 LLM 失败时：若要求中文则返回中文占位，否则返回原文截断
   if (lang === 'zh') return { translation: '（原文为英文，自动翻译暂不可用，请稍后重试）' };
   return { translation: text.substring(0, 200) + (text.length > 200 ? '...' : '') };
 }
@@ -467,18 +471,14 @@ async function translateWithLLM(body) {
     const out = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
     if (out) {
       let translation = out.trim();
-      // 去掉 LLM 可能返回的 [语言名] 前缀，避免界面显示「默认中文」
       translation = translation.replace(/^\[[^\]]+\]\s*/, '');
-      // 语言兜底：要求中文时若结果仍不是以中文为主，把当前结果当「待译英文」再翻一次
       if (body.targetLang === 'zh' && translation && !isMostlyCJK(translation)) {
         try {
           const retry = await translateWithLLM({ text: translation, targetLang: 'zh' });
           if (retry && retry.translation && isMostlyCJK(retry.translation))
             translation = retry.translation.trim();
-          else {
-            console.warn('Translate zh fallback still not Chinese:', (retry && retry.translation) ? retry.translation.substring(0, 80) : 'no retry');
+          else
             translation = '（原文为英文，自动翻译暂不可用，请稍后重试）';
-          }
         } catch (e) {
           translation = '（原文为英文，自动翻译暂不可用，请稍后重试）';
         }
@@ -561,7 +561,6 @@ ${content}`;
       const parsed = JSON.parse(out.replace(/[\s\S]*?(\{[\s\S]*\})[\s\S]*/, '$1'));
       let summary = (parsed.summary || '').trim();
       let replyPoints = (parsed.replyPoints || '').trim();
-      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文；若翻译后仍非中文则用占位
       const zhPlaceholderSummary = '（工单总结生成中，请稍后重试）';
       const zhPlaceholderPoints = '（回复要点生成中，请稍后重试）';
       if (body.lang === 'zh') {

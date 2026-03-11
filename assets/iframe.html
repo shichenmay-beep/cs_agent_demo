@@ -64,9 +64,26 @@
     .badge--medium { background: var(--medium-bg); color: var(--medium); }
     .badge--low { background: var(--low-bg); color: var(--low); }
     .muted { color: var(--text-muted); font-size: 11px; }
+    .confirm-overlay { display: none; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 9999; align-items: center; justify-content: center; }
+    .confirm-overlay.show { display: flex; }
+    .confirm-box { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; max-width: 92%; max-height: 80%; overflow: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .confirm-box .confirm-msg { font-size: 13px; line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; word-break: break-word; }
+    .confirm-box .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .confirm-box .confirm-actions button { min-width: 64px; }
+    .confirm-box .confirm-actions .btn-cancel { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .confirm-box .confirm-actions .btn-ok { background: var(--high); color: #fff; }
   </style>
 </head>
 <body>
+  <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true">
+    <div class="confirm-box">
+      <div id="confirm-msg" class="confirm-msg"></div>
+      <div class="confirm-actions">
+        <button type="button" id="confirm-cancel" class="btn-cancel secondary">取消</button>
+        <button type="button" id="confirm-ok" class="btn-ok">确定</button>
+      </div>
+    </div>
+  </div>
   <div id="priority-bar-wrap"></div>
   <div id="priority-error" class="error" style="display:none;"></div>
 
@@ -87,7 +104,7 @@
         <button id="btn-oneclick-send" class="secondary" style="background:#b91c1c; color:#fff;">一键发送</button>
         <button id="btn-use-send">填入回复框</button>
       </div>
-      <p class="muted" style="font-size:10px; margin-top:6px; color:var(--medium);">「一键发送」= 直接发公开回复；「填入回复框」= 仅填入，可在 Zendesk 中编辑后再点提交。</p>
+      <p class="muted" style="font-size:10px; margin-top:6px; color:var(--medium);">「一键发送」= 直接发公开回复；「填入回复框」= 仅填入，可在 Zendesk 中编辑后再点提交。若失败请打开 F12 → Console 查看 [CS Agent] 错误。</p>
     </div>
     <div id="reply-error" class="error"></div>
   </div>
@@ -120,8 +137,24 @@
   <script>
     (function() {
       var client = ZAFClient.init();
-      // 请求侧栏更大显示区域，减少滚动（宽度由 Zendesk 与用户拖动决定，高度可请求）
       client.invoke('resize', { width: '100%', height: '680px' }).catch(function() {});
+
+      // 自定义确认弹窗（iframe 沙箱会拦截 confirm()，改用应用内弹窗）
+      function showConfirm(message, onConfirm) {
+        var overlay = document.getElementById('confirm-overlay');
+        var msgEl = document.getElementById('confirm-msg');
+        var btnOk = document.getElementById('confirm-ok');
+        var btnCancel = document.getElementById('confirm-cancel');
+        if (!overlay || !msgEl) return;
+        msgEl.textContent = message || '';
+        overlay.classList.add('show');
+        function close() { overlay.classList.remove('show'); }
+        btnOk.onclick = function() {
+          close();
+          if (typeof onConfirm === 'function') onConfirm();
+        };
+        btnCancel.onclick = close;
+      }
 
       function backendUrl() {
         return client.metadata().then(function(meta) {
@@ -464,51 +497,64 @@
 
       document.getElementById('btn-reply-with-prompt').onclick = function() { runSuggestReply(true); };
 
-      // 一键发送：直接调用 Zendesk API 提交公开回复，客户会收到；需二次确认防误触。
+      // 一键发送：Zendesk API PUT ticket 带 comment 添加公开回复；用应用内弹窗确认（沙箱会拦截 confirm()）。
       document.getElementById('btn-oneclick-send').onclick = function() {
         var text = document.getElementById('reply-text').value.trim();
         if (!text) return;
         var preview = text.length > 200 ? text.substring(0, 200) + '…' : text;
-        if (!confirm('将直接作为公开回复发送给客户，发送后无法撤回。\n\n确定发送？\n\n---\n' + preview)) return;
         var errEl = document.getElementById('reply-error');
         var btn = document.getElementById('btn-oneclick-send');
-        errEl.textContent = '';
-        btn.disabled = true;
-        getTicketContext().then(function(ctx) {
-          var tid = ctx.ticketId;
-          if (!tid) throw new Error('无法获取工单 ID');
-          return client.request({
-            url: '/api/v2/tickets/' + tid + '.json',
-            type: 'PUT',
-            contentType: 'application/json',
-            data: JSON.stringify({ ticket: { comment: { body: text, public: true } } })
-          });
-        }).then(function() {
-          document.getElementById('reply-area').style.display = 'none';
-          document.getElementById('reply-text').value = '';
+        showConfirm('将直接作为公开回复发送给客户，发送后无法撤回。\n\n确定发送？\n\n---\n' + preview, function() {
           errEl.textContent = '';
-          errEl.style.color = 'var(--low)';
-          errEl.textContent = '已发送。';
-          setTimeout(function() { errEl.textContent = ''; errEl.style.color = ''; }, 3000);
-        }).catch(function(e) {
-          var msg = (e && e.message) ? e.message : (e && e.responseJSON && e.responseJSON.error) ? (typeof e.responseJSON.error === 'string' ? e.responseJSON.error : JSON.stringify(e.responseJSON.error)) : '未知错误';
-          errEl.textContent = '发送失败: ' + msg;
-        }).finally(function() {
-          btn.disabled = false;
+          btn.disabled = true;
+          getTicketContext().then(function(ctx) {
+            var tid = ctx.ticketId;
+            if (!tid) throw new Error('无法获取工单 ID');
+            return client.request({
+              url: '/api/v2/tickets/' + tid + '.json',
+              type: 'PUT',
+              contentType: 'application/json',
+              data: JSON.stringify({ ticket: { comment: { body: text, public: true } } }),
+              cors: false
+            });
+          }).then(function(res) {
+            document.getElementById('reply-area').style.display = 'none';
+            document.getElementById('reply-text').value = '';
+            errEl.textContent = '';
+            errEl.style.color = 'var(--low)';
+            errEl.textContent = '已发送。';
+            setTimeout(function() { errEl.textContent = ''; errEl.style.color = ''; }, 3000);
+          }).catch(function(e) {
+            var msg = (e && e.message) ? e.message : (e && e.responseJSON && e.responseJSON.error) ? (typeof e.responseJSON.error === 'string' ? e.responseJSON.error : JSON.stringify(e.responseJSON.error)) : (e && e.status) ? 'HTTP ' + e.status : '未知错误';
+            errEl.textContent = '发送失败: ' + msg;
+            if (typeof console !== 'undefined' && console.error) console.error('[CS Agent] 一键发送 request 失败', e);
+          }).finally(function() {
+            btn.disabled = false;
+          });
         });
       };
 
-      // 仅调用 comment.appendText 填入回复框，不提交；客服可在 Zendesk 中编辑后再点提交。
+      // 填入回复框：用应用内弹窗确认（沙箱会拦截 confirm()）；ZAF 可用 ticket.comment.appendText 或 comment.appendText。
       document.getElementById('btn-use-send').onclick = function() {
         var text = document.getElementById('reply-text').value.trim();
         if (!text) return;
-        if (!confirm('将把建议回复填入 Zendesk 回复框，您可在其中编辑后再点提交。\n\n是否继续填入？')) return;
-        client.invoke('comment.appendText', text).then(function() {
-          document.getElementById('reply-area').style.display = 'none';
-          document.getElementById('reply-text').value = '';
-          document.getElementById('reply-error').textContent = '';
-        }).catch(function(e) {
-          document.getElementById('reply-error').textContent = '填入失败: ' + (e && e.message ? e.message : '未知错误');
+        var errEl = document.getElementById('reply-error');
+        showConfirm('将把建议回复填入 Zendesk 回复框，您可在其中编辑后再点提交。\n\n是否继续填入？', function() {
+          errEl.textContent = '';
+          function onSuccess() {
+            document.getElementById('reply-area').style.display = 'none';
+            document.getElementById('reply-text').value = '';
+            errEl.textContent = '';
+          }
+          function onFail(e) {
+            var msg = (e && e.message) ? e.message : (e && e.responseJSON && e.responseJSON.error) ? (typeof e.responseJSON.error === 'string' ? e.responseJSON.error : JSON.stringify(e.responseJSON.error)) : (e && typeof e === 'string') ? e : '未知错误';
+            errEl.textContent = '填入失败: ' + msg;
+            if (typeof console !== 'undefined' && console.error) console.error('[CS Agent] 填入回复框 invoke 失败', e);
+          }
+          client.invoke('ticket.comment.appendText', [text]).then(onSuccess).catch(function(e1) {
+            if (typeof console !== 'undefined' && console.warn) console.warn('[CS Agent] ticket.comment.appendText 失败，尝试 comment.appendText', e1);
+            client.invoke('comment.appendText', text).then(onSuccess).catch(onFail);
+          });
         });
       };
     })();

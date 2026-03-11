@@ -9,7 +9,8 @@
 ## 一、配置与启动
 
 - **环境变量**：优先读 `process.env`（Railway Variables），其次 `backend/.env`、`backend/config.json`。  
-  - 需配置：`OPENAI_API_KEY`、`OPENAI_API_BASE`（如 `https://openrouter.ai/api/v1`）、`OPENAI_MODEL`。  
+  - **与 OpenClaw 一致**：支持 **`OPENAI_API_KEY`** 或 **`OPENROUTER_API_KEY`**；OpenRouter 时 baseUrl 固定为 `https://openrouter.ai/api/v1`（与 `~/.openclaw/openclaw.json` 里 `providers.openrouter.baseUrl` 相同）。  
+  - 需配置：上述其一 Key、`OPENAI_API_BASE`（可选，OpenRouter 时可不设）、`OPENAI_MODEL`。  
   - 可选 **`OPENAI_MAX_CONVERSATION_CHARS`**：限制传入模型的会话长度（字符数），只保留最近一段，避免超长会话超出模型上下文；0 或不设为不截断。建议用长上下文模型（如 `google/gemini-2.0-flash-001`）时可不设。
 - **提示词**：先读 `../product_docs/prompts.json`，不存在则读 **`backend/prompts.json`**（Railway 部署时只有后者）。
 - **监听**：`PORT` 由环境注入，默认 3000；`HOST` 默认 `0.0.0.0`。
@@ -79,3 +80,14 @@
 - **Root Directory** = **`backend`**（仓库根下直接有 `backend` 时）。
 - **Variables** 必填：`OPENAI_API_KEY`、`OPENAI_API_BASE`、`OPENAI_MODEL`。
 - 部署后无 `product_docs/`，提示词仅来自 **backend/prompts.json**；若在本地改了 product_docs/prompts.json，需同步到 backend/prompts.json 并 push 后重新部署才生效。
+
+---
+
+## 七、为什么「未调用成功」？大模型接口排查
+
+- **原因**：未配置 key 或接口报错时，后端会走 **mock**（翻译/总结返回兜底中文文案），不会真正调 LLM。
+- **诊断**：
+  1. **GET /health**：响应里的 `llm.configured` 表示是否读到 `OPENAI_API_KEY`；`llm.model`、`llm.baseURLSet` 表示模型和 baseURL 是否配置。
+  2. **GET /llm-check**：会真正发一次极简请求到当前配置的 LLM；返回 `ok: true` 表示接口可用，否则返回 `error`、`status`（如 401/429）便于排查。
+- **若 `llm.configured === false`**：在 Railway 项目 → 该服务 → **Variables** 里添加 `OPENAI_API_KEY`（OpenRouter 的 key 或 OpenAI key），保存后会自动重新部署。
+- **若 key 已配置但 /llm-check 报错**：看返回的 `error`/`status`（如 401 鉴权失败、429 限流、502 上游错误）；后端日志里也会打 `[translate]`、`[summarize]`、`[priority]`、`[suggest-reply]` 的 LLM error 及 status。
