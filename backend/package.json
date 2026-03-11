@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test:lang": "node test-backend-lang.js",
+    "test:lang:railway": "node test-backend-lang.js https://csagentdemo-production.up.railway.app"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -517,19 +517,23 @@ ${content}`;
       const parsed = JSON.parse(out.replace(/[\s\S]*?(\{[\s\S]*\})[\s\S]*/, '$1'));
       let summary = (parsed.summary || '').trim();
       let replyPoints = (parsed.replyPoints || '').trim();
-      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文
+      // 语言兜底：要求中文时，只要输出不是以中文为主就强制翻译成中文；若翻译后仍非中文则用占位
+      const zhPlaceholderSummary = '（工单总结生成中，请稍后重试）';
+      const zhPlaceholderPoints = '（回复要点生成中，请稍后重试）';
       if (body.lang === 'zh') {
         if (summary && !isMostlyCJK(summary)) {
           try {
             const tr = await translateWithLLM({ text: summary, targetLang: 'zh' });
             if (tr && tr.translation) summary = tr.translation.trim();
-          } catch (e) { /* 保留原文 */ }
+            if (!isMostlyCJK(summary)) summary = zhPlaceholderSummary;
+          } catch (e) { summary = zhPlaceholderSummary; }
         }
         if (replyPoints && !isMostlyCJK(replyPoints)) {
           try {
             const tr = await translateWithLLM({ text: replyPoints, targetLang: 'zh' });
             if (tr && tr.translation) replyPoints = tr.translation.trim();
-          } catch (e) { /* 保留原文 */ }
+            if (!isMostlyCJK(replyPoints)) replyPoints = zhPlaceholderPoints;
+          } catch (e) { replyPoints = zhPlaceholderPoints; }
         }
       }
       return { summary, replyPoints };

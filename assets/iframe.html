@@ -325,6 +325,15 @@
       refreshLastCustomerMsg();
       client.on('ticket.updated', function() { refreshLastCustomerMsg(); });
 
+      /** 工单就绪后自动生成第一版建议回复（仅首次）；用户加提示词点「生成回复」时为重新生成 */
+      function runFirstSuggestReply() {
+        getTicketContext().then(function(ctx) {
+          if (!ctx.ticketId) return;
+          runSuggestReply(false);
+        }).catch(function() {});
+      }
+      setTimeout(runFirstSuggestReply, 500);
+
       function getTicketComments() {
         return client.get('ticket.id').then(function(data) {
           var tid = data['ticket.id'];
@@ -452,8 +461,6 @@
           if (btn) btn.disabled = false;
         });
       }
-
-      runSuggestReply(false);
 
       document.getElementById('btn-reply-with-prompt').onclick = function() { runSuggestReply(true); };
 
