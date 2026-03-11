@@ -72,6 +72,21 @@ function getOpenAIConfig() {
   return { apiKey, model, baseURL };
 }
 
+/** 可选：限制传入模型的会话长度，避免超出上下文。0 表示不截断。保留最近 maxChars 字符。 */
+function getMaxConversationChars() {
+  const v = process.env.OPENAI_MAX_CONVERSATION_CHARS;
+  if (v === undefined || v === '') return 0;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) || n < 0 ? 0 : n;
+}
+
+function truncateConversationTail(text, maxChars) {
+  if (!maxChars || !text || typeof text !== 'string') return text || '';
+  const t = text.trim();
+  if (t.length <= maxChars) return text;
+  return '(前文已省略，仅保留最近部分)\n\n' + t.slice(-maxChars);
+}
+
 function loadProductDocs() {
   try {
     const raw = fs.readFileSync(PRODUCT_DOCS_PATH, 'utf8');
@@ -178,6 +193,15 @@ function mockReply(body) {
 const REASON_LANG_MAP = { zh: '中文', en: 'English', ja: '日本語' };
 const DEFAULT_PRIORITY_INSTRUCTION = 'Use 4 levels: P0 = legal/very urgent/escalation; P1 = refund/defective/strong complaint; P2 = return/shipping/order query; P3 = general question.';
 
+/** 粗略判断文本是否主要为英文（用于语言兜底：当要求中文但模型仍输出英文时自动翻译） */
+function isMostlyEnglish(text) {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.replace(/\s/g, '');
+  if (t.length < 2) return false;
+  const asciiLetters = (t.match(/[A-Za-z]/g) || []).length;
+  return asciiLetters / t.length > 0.5;
+}
+
 // Optional: call OpenAI for real priority
 async function evaluatePriorityWithLLM(body) {
   const { apiKey, model, baseURL } = getOpenAIConfig();
@@ -220,7 +244,15 @@ ${instruction}`;
       const parsed = JSON.parse(text.replace(/[\s\S]*?(\{[\s\S]*\})[\s\S]*/, '$1'));
       const p = (parsed.priority || 'P2').toString().toUpperCase();
       const valid = ['P0', 'P1', 'P2', 'P3'];
-      return { priority: valid.includes(p) ? p : 'P2', reason: parsed.reason || '' };
+      let reason = (parsed.reason || '').trim();
+      // 语言兜底：要求中文但模型仍输出英文时，自动翻译为中文
+      if (body.lang === 'zh' && reason && isMostlyEnglish(reason)) {
+        try {
+          const tr = await translateWithLLM({ text: reason, targetLang: 'zh' });
+          if (tr && tr.translation) reason = tr.translation.trim();
+        } catch (e) { /* 翻译失败则保留原文 */ }
+      }
+      return { priority: valid.includes(p) ? p : 'P2', reason };
     }
   } catch (e) {
     console.warn('LLM priority error:', e.message);
@@ -287,6 +319,11 @@ async function suggestReplyWithLLM(body) {
       : `${langInstr} Tone: ${toneInstr}. You must reply in the same language as the customer's messages.`;
     const r = prompts.reply;
     const instruction = r.instruction || DEFAULT_REPLY_INSTRUCTION;
+    const maxConv = getMaxConversationChars();
+    const conversationHistory = truncateConversationTail(
+      body.conversationHistory || 'No previous messages.',
+      maxConv || 1e6
+    );
     let prompt;
     if (r.template) {
       prompt = applyTemplate(r.template, {
@@ -298,7 +335,7 @@ async function suggestReplyWithLLM(body) {
         description: body.description || '',
         requesterName: body.requesterName || '',
         tags: (body.tags || []).join(', ') || '（无）',
-        conversationHistory: body.conversationHistory || 'No previous messages.'
+        conversationHistory
       });
     } else {
       prompt = `You are a customer support agent. ${agentInstruction}. ${instruction}
@@ -311,7 +348,7 @@ Ticket description: ${body.description || ''}
 Requester: ${body.requesterName || ''}
 
 Conversation history (if any):
-${body.conversationHistory || 'No previous messages.'}`;
+${conversationHistory}`;
     }
     const res = await openai.chat.completions.create({
       model,
@@ -421,7 +458,11 @@ async function summarizeWithLLM(body) {
     const OpenAI = require('openai');
     const openai = new OpenAI({ apiKey, ...(baseURL && { baseURL }) });
     const lang = TARGET_LANG_MAP[body.lang || 'zh'] || 'Simplified Chinese';
-    const content = (body.subject || '') + '\n\n' + (body.description || '') + (body.conversationHistory ? '\n\nConversation:\n' + body.conversationHistory : '');
+    const maxConv = getMaxConversationChars();
+    const convPart = body.conversationHistory
+      ? '\n\nConversation:\n' + truncateConversationTail(body.conversationHistory, maxConv || 1e6)
+      : '';
+    const content = (body.subject || '') + '\n\n' + (body.description || '') + convPart;
     if (!content.trim()) return { summary: '', replyPoints: '' };
     const prompts = loadPrompts();
     const s = prompts.summary;
@@ -448,7 +489,24 @@ ${content}`;
     const out = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
     if (out) {
       const parsed = JSON.parse(out.replace(/[\s\S]*?(\{[\s\S]*\})[\s\S]*/, '$1'));
-      return { summary: (parsed.summary || '').trim(), replyPoints: (parsed.replyPoints || '').trim() };
+      let summary = (parsed.summary || '').trim();
+      let replyPoints = (parsed.replyPoints || '').trim();
+      // 语言兜底：要求中文但模型仍输出英文时，自动翻译为中文
+      if (body.lang === 'zh') {
+        if (summary && isMostlyEnglish(summary)) {
+          try {
+            const tr = await translateWithLLM({ text: summary, targetLang: 'zh' });
+            if (tr && tr.translation) summary = tr.translation.trim();
+          } catch (e) { /* 保留原文 */ }
+        }
+        if (replyPoints && isMostlyEnglish(replyPoints)) {
+          try {
+            const tr = await translateWithLLM({ text: replyPoints, targetLang: 'zh' });
+            if (tr && tr.translation) replyPoints = tr.translation.trim();
+          } catch (e) { /* 保留原文 */ }
+        }
+      }
+      return { summary, replyPoints };
     }
   } catch (e) {
     console.warn('Summarize error:', e.message);

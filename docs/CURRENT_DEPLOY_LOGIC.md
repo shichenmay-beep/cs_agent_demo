@@ -9,7 +9,8 @@
 ## 一、配置与启动
 
 - **环境变量**：优先读 `process.env`（Railway Variables），其次 `backend/.env`、`backend/config.json`。  
-  - 需配置：`OPENAI_API_KEY`、`OPENAI_API_BASE`（如 `https://openrouter.ai/api/v1`）、`OPENAI_MODEL`。
+  - 需配置：`OPENAI_API_KEY`、`OPENAI_API_BASE`（如 `https://openrouter.ai/api/v1`）、`OPENAI_MODEL`。  
+  - 可选 **`OPENAI_MAX_CONVERSATION_CHARS`**：限制传入模型的会话长度（字符数），只保留最近一段，避免超长会话超出模型上下文；0 或不设为不截断。建议用长上下文模型（如 `google/gemini-2.0-flash-001`）时可不设。
 - **提示词**：先读 `../product_docs/prompts.json`，不存在则读 **`backend/prompts.json`**（Railway 部署时只有后者）。
 - **监听**：`PORT` 由环境注入，默认 3000；`HOST` 默认 `0.0.0.0`。
 - **健康检查**：`GET /health` → `{ ok: true, service: 'cs-agent-backend' }`。
@@ -44,7 +45,16 @@
 
 ---
 
-## 三、提示词要点（backend/prompts.json）
+## 三、大模型输出有没有被改？为什么还是英文？
+
+- **没有**其他逻辑会“设置语言”或改写 LLM 正文，只有：**trim**、从回复里 **提 JSON**、以及 **翻译接口去掉 `[语言]` 前缀**。
+- **建议回复**：设计就是「和客户同语言」——客户用英文就出英文、用中文就出中文，所以英文工单看到英文回复是预期行为。
+- **优先级 reason、工单总结、回复要点**：提示词里已要求用 `reasonLang` / `lang` 写，若模型仍出英文，已加 **语言兜底**：
+  - 当客服偏好为 **中文**（`lang === 'zh'`）且解析出的 reason / summary / replyPoints **主要为英文**（超过约一半为英文字母）时，后端会再调一次 **翻译接口** 把该段转成中文再返回，保证界面显示为中文。
+
+---
+
+## 四、提示词要点（backend/prompts.json）
 
 | 模块 | 要点 |
 |------|------|
@@ -55,7 +65,7 @@
 
 ---
 
-## 四、前端侧栏（与部署一致）
+## 五、前端侧栏（与部署一致）
 
 - 打开工单即自动请求：优先级、翻译（用户最后一条）、工单总结、**建议回复**（默认生成一次）。
 - 所有「客服偏好语言」由 **agent-lang** 下拉框决定，传给后端的 `lang` / `targetLang`。
@@ -64,7 +74,7 @@
 
 ---
 
-## 五、Railway 部署时注意
+## 六、Railway 部署时注意
 
 - **Root Directory** = **`backend`**（仓库根下直接有 `backend` 时）。
 - **Variables** 必填：`OPENAI_API_KEY`、`OPENAI_API_BASE`、`OPENAI_MODEL`。

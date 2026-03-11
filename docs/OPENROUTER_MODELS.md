@@ -2,12 +2,27 @@
 
 后端通过 OpenRouter 调用大模型，在 VM 或本机设置 `OPENAI_MODEL`（或写入 `backend/config.json`）即可切换。Base 保持 `https://openrouter.ai/api/v1`。
 
+## 长上下文模型（会话/工单很长时优先）
+
+工单或会话条数多、内容长时，若模型上下文不够可能被截断，导致总结/建议回复不完整。可改用**长上下文**模型再试：
+
+| 模型 ID | 上下文约 | 说明 |
+|--------|----------|------|
+| **google/gemini-2.0-flash-001** | **约 100 万 token** | 推荐：上下文长、价格适中，适合长会话 |
+| **google/gemini-2.5-pro** | 约 100 万 token | 能力更强，长会话 + 高回复质量 |
+| **google/gemini-2.5-flash** | 较短 | 默认之一，会话不长时够用 |
+
+在环境变量或 `config.json` 里把 `OPENAI_MODEL` 设为 `google/gemini-2.0-flash-001` 即可切换到长上下文模型。
+
+---
+
 ## 推荐模型（文本 / 图文均支持）
 
 | 模型 ID | 说明 | 适用场景 |
 |--------|------|----------|
-| **google/gemini-2.5-flash** | 速度快、价格低，文本与简单图文都不错 | 默认推荐，工单总结/回复/优先级 |
-| **google/gemini-2.5-pro** | 能力更强、推理更好 | 需要更高回复质量时 |
+| **google/gemini-2.5-flash** | 速度快、价格低，文本与简单图文都不错 | 工单总结/回复/优先级，会话不长时 |
+| **google/gemini-2.0-flash-001** | 1M 上下文，适合长会话 | **会话或工单很长时优先** |
+| **google/gemini-2.5-pro** | 能力更强、推理更好，长上下文 | 需要更高回复质量或长会话 |
 | **google/gemini-2.0-flash-exp** | 实验版 Flash，迭代快 | 想用最新能力时可试 |
 | **anthropic/claude-sonnet-4.5** | 文本质量好，支持图文 | 重视英文/多语言回复质量 |
 | **openai/gpt-4o** | 文本+图像均衡 | 需要稳定多模态时 |
