@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 // 版本号：每次发版改这里，便于确认 Railway/VM 是否跑的是最新部署
-const BACKEND_VERSION = '1.0.3';
+const BACKEND_VERSION = '1.0.4';
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
@@ -399,7 +399,8 @@ function mockTranslate(body) {
   const text = (body.text || '').trim();
   if (!text) return { translation: '' };
   const lang = body.targetLang || 'zh';
-  // 不返回 [语言名] 前缀，与 LLM 返回格式一致
+  // 无 key 或 LLM 失败时：若要求中文则返回中文占位，否则返回原文截断
+  if (lang === 'zh') return { translation: '（原文为英文，自动翻译暂不可用，请稍后重试）' };
   return { translation: text.substring(0, 200) + (text.length > 200 ? '...' : '') };
 }
 
@@ -469,6 +470,13 @@ app.post('/translate', async (req, res) => {
 function mockSummarize(body) {
   const raw = ((body.subject || '') + ' ' + (body.description || '')).trim();
   if (!raw) return { summary: '', replyPoints: '' };
+  const lang = body.lang || 'zh';
+  if (lang === 'zh') {
+    return {
+      summary: '（工单总结生成中，请稍后重试）',
+      replyPoints: '（回复要点生成中，请稍后重试）'
+    };
+  }
   return {
     summary: raw.substring(0, 120) + (raw.length > 120 ? '…' : ''),
     replyPoints: 'Address customer request; ask for order ID if needed; mention return/refund policy if relevant.'
