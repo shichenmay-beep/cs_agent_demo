@@ -41,7 +41,7 @@
     #reply-text { min-height: 220px; }
     .actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
     .loading { color: var(--text-muted); font-size: 12px; }
-    .error { color: var(--high); font-size: 11px; margin-top: 4px; }
+    .error { color: var(--high); font-size: 11px; margin-top: 4px; padding: 6px 8px; background: #fef2f2; border-radius: 4px; }
     .original-text { background: #f0f2f5; padding: 6px 8px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 96px; overflow-y: auto; }
     .summary-box { background: #f0f2f5; padding: 8px 10px; border-radius: 4px; font-size: 12px; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
     .summary-box:not(.collapsible-text) { max-height: 180px; overflow-y: auto; }
@@ -401,12 +401,29 @@
             })
           });
         }).then(function(r) {
-          if (!r.ok) throw new Error('请求失败: ' + r.status);
-          return r.json();
-        }).then(function(data) {
+          return r.text().then(function(text) {
+            var data = null;
+            try { data = text ? JSON.parse(text) : null; } catch (e) {}
+            if (!r.ok) {
+              if (data && (data.reply || data.reply_text)) {
+                return { data: data, fallback: true };
+              }
+              throw new Error('请求失败: ' + r.status + (data && data.message ? ' ' + data.message : ''));
+            }
+            return { data: data || {}, fallback: data && data.fallback };
+          });
+        }).then(function(payload) {
+          var data = payload.data || {};
           var reply = (data.reply || data.reply_text || '').trim();
           replyText.value = reply;
           replyText.placeholder = '建议回复将显示在此…';
+          if (payload.fallback && reply) {
+            errEl.textContent = '已使用备用回复，若需完整生成请检查后端与 API Key。';
+            errEl.style.display = 'block';
+          } else {
+            errEl.textContent = '';
+            errEl.style.display = '';
+          }
           var transEl = document.getElementById('reply-points-translation');
           if (reply && transEl) {
             transEl.textContent = '直译中…';
@@ -427,7 +444,10 @@
           }
         }).catch(function(e) {
           errEl.textContent = e.message || '生成失败，请检查后端地址与网络';
-          replyText.placeholder = '建议回复将显示在此…';
+          errEl.style.display = 'block';
+          replyText.placeholder = '生成失败，请重试或检查网络与后端';
+          replyText.value = '';
+          errEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }).finally(function() {
           if (btn) btn.disabled = false;
         });

@@ -340,7 +340,9 @@ app.post('/suggest-reply', async (req, res) => {
     const result = await suggestReplyWithLLM(req.body);
     res.json(result);
   } catch (e) {
-    res.status(500).json({ reply: mockReply(req.body) });
+    console.error('suggest-reply error:', e.message || e);
+    // 返回 200 + 备用回复，避免前端只看到“无反应”；前端可根据 fallback 提示
+    res.status(200).json({ reply: mockReply(req.body), fallback: true });
   }
 });
 
