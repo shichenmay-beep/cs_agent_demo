@@ -234,6 +234,7 @@
         backendUrl().then(function(base) {
           return fetch(base + '/translate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: text, targetLang: lang }) });
         }).then(function(r) { return r && r.ok ? r.json() : null; }).then(function(data) {
+          if (data && data.translation) console.log('[aicomu translate 返回]', data.translation);
           var t = (data && data.translation) ? data.translation : '（暂不可用）';
           document.getElementById('last-msg-translation').textContent = t;
           setupCollapsible('last-msg-translation', 'last-msg-translation-expand');
@@ -263,7 +264,7 @@
         });
       }
       refreshTicketSummary();
-      client.on('ticket.updated', refreshTicketSummary);
+      client.on('ticket.updated', function() { refreshTicketSummary(); });
       document.getElementById('agent-lang').onchange = function() {
         doLastMsgTranslate();
         refreshTicketSummary();
@@ -322,7 +323,7 @@
         }).catch(function() { el.textContent = '（加载失败）'; document.getElementById('last-msg-expand').style.display = 'none'; });
       }
       refreshLastCustomerMsg();
-      client.on('ticket.updated', refreshLastCustomerMsg);
+      client.on('ticket.updated', function() { refreshLastCustomerMsg(); });
 
       function getTicketComments() {
         return client.get('ticket.id').then(function(data) {

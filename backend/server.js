@@ -415,7 +415,8 @@ async function translateWithLLM(body) {
     const target = TARGET_LANG_MAP[body.targetLang || 'zh'] || 'Simplified Chinese';
     const prompts = loadPrompts();
     const t = prompts.translate;
-    const instruction = t.instruction || DEFAULT_TRANSLATE_INSTRUCTION;
+    let instruction = t.instruction || DEFAULT_TRANSLATE_INSTRUCTION;
+    if (body.targetLang === 'zh') instruction += '\n【必须】你的回复必须全部是简体中文，不得输出英文或其他语言。';
     let content;
     if (t.template) {
       content = applyTemplate(t.template, { target, instruction, text });
@@ -432,12 +433,11 @@ async function translateWithLLM(body) {
       let translation = out.trim();
       // 去掉 LLM 可能返回的 [语言名] 前缀，避免界面显示「默认中文」
       translation = translation.replace(/^\[[^\]]+\]\s*/, '');
-      // 语言兜底：要求中文时若结果仍不是以中文为主，再翻译一次
+      // 语言兜底：要求中文时若结果仍不是以中文为主，把当前结果当「待译英文」再翻一次
       if (body.targetLang === 'zh' && translation && !isMostlyCJK(translation)) {
         try {
-          const retry = await translateWithLLM(body);
-          if (retry && retry.translation && isMostlyCJK(retry.translation))
-            translation = retry.translation.trim();
+          const retry = await translateWithLLM({ text: translation, targetLang: 'zh' });
+          if (retry && retry.translation) translation = retry.translation.trim();
         } catch (e) { /* 保留第一次结果 */ }
       }
       return { translation };
