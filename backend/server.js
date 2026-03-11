@@ -437,8 +437,15 @@ async function translateWithLLM(body) {
       if (body.targetLang === 'zh' && translation && !isMostlyCJK(translation)) {
         try {
           const retry = await translateWithLLM({ text: translation, targetLang: 'zh' });
-          if (retry && retry.translation) translation = retry.translation.trim();
-        } catch (e) { /* 保留第一次结果 */ }
+          if (retry && retry.translation && isMostlyCJK(retry.translation))
+            translation = retry.translation.trim();
+          else {
+            console.warn('Translate zh fallback still not Chinese:', (retry && retry.translation) ? retry.translation.substring(0, 80) : 'no retry');
+            translation = '（原文为英文，自动翻译暂不可用，请稍后重试）';
+          }
+        } catch (e) {
+          translation = '（原文为英文，自动翻译暂不可用，请稍后重试）';
+        }
       }
       return { translation };
     }
