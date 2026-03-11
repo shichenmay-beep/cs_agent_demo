@@ -23,6 +23,7 @@ app.get('/health', (req, res) => {
 
 const PRODUCT_DOCS_PATH = path.join(__dirname, '..', 'product_docs', 'faq.json');
 const PROMPTS_PATH = path.join(__dirname, '..', 'product_docs', 'prompts.json');
+const PROMPTS_FALLBACK_PATH = path.join(__dirname, 'prompts.json');
 const CONFIG_DEFAULT_PATH = path.join(__dirname, 'config.default.json');
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || ''; // e.g. http://127.0.0.1:5001
@@ -74,8 +75,9 @@ function loadProductDocs() {
 }
 
 function loadPrompts() {
+  const tryPath = fs.existsSync(PROMPTS_PATH) ? PROMPTS_PATH : PROMPTS_FALLBACK_PATH;
   try {
-    const raw = fs.readFileSync(PROMPTS_PATH, 'utf8');
+    const raw = fs.readFileSync(tryPath, 'utf8');
     const data = JSON.parse(raw);
     return {
       priority: {
@@ -191,12 +193,13 @@ async function evaluatePriorityWithLLM(body) {
         instruction
       });
     } else {
-      prompt = `You are a CS triage agent. Output ONLY a JSON: "priority" (one of P0, P1, P2, P3) and "reason" (one short sentence in ${reasonLang}).
+      prompt = `你是工单调度员。仅输出一个 JSON，包含 "priority"（P0/P1/P2/P3 之一）和 "reason"。
+reason 必须且仅用以下语言书写：${reasonLang}。不要跟随工单内容语言（例如工单是英文但 reasonLang 为中文时，reason 用中文写）。
 
-Ticket subject: ${body.subject || ''}
-Ticket description: ${body.description || ''}
-Requester email: ${body.requesterEmail || ''}
-Tags: ${(body.tags || []).join(', ')}
+工单主题：${body.subject || ''}
+工单描述：${body.description || ''}
+客户邮箱：${body.requesterEmail || ''}
+标签：${(body.tags || []).join(', ')}
 
 ${instruction}`;
     }
@@ -321,7 +324,7 @@ app.post('/evaluate-priority', async (req, res) => {
     const result = await evaluatePriorityWithLLM(req.body);
     res.json(result);
   } catch (e) {
-    res.status(500).json({ priority: 'P2', reason: 'Evaluation failed.' });
+    res.status(500).json({ priority: 'P2', reason: '评估失败。' });
   }
 });
 
@@ -340,10 +343,11 @@ function mockTranslate(body) {
   const text = (body.text || '').trim();
   if (!text) return { translation: '' };
   const lang = body.targetLang || 'zh';
-  return { translation: '[' + (TARGET_LANG_MAP[lang] || '中文') + '] ' + text.substring(0, 200) + (text.length > 200 ? '...' : '') };
+  // 不返回 [语言名] 前缀，与 LLM 返回格式一致
+  return { translation: text.substring(0, 200) + (text.length > 200 ? '...' : '') };
 }
 
-const DEFAULT_TRANSLATE_INSTRUCTION = 'Output only the translation, no explanation.';
+const DEFAULT_TRANSLATE_INSTRUCTION = '仅输出译文，不要解释。';
 
 async function translateWithLLM(body) {
   const { apiKey, model, baseURL } = getOpenAIConfig();
@@ -369,7 +373,12 @@ async function translateWithLLM(body) {
       temperature: 0.2
     });
     const out = res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;
-    if (out) return { translation: out.trim() };
+    if (out) {
+      let translation = out.trim();
+      // 去掉 LLM 可能返回的 [语言名] 前缀，避免界面显示「默认中文」
+      translation = translation.replace(/^\[[^\]]+\]\s*/, '');
+      return { translation };
+    }
   } catch (e) {
     console.warn('Translate error:', e.message);
   }

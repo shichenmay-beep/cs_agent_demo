@@ -21,7 +21,7 @@
 
 1. **注册**：[railway.app](https://railway.app) 用 GitHub 登录。
 2. **新建项目**：New Project → 选 **Deploy from GitHub repo**，连到你 fork 的仓库；或选 **Empty Project** 后本地用 Railway CLI 部署。
-3. **指定根目录**：若仓库是整仓，在 Railway 里把 **Root Directory** 设为 `cs_agent_demo/backend`（或只把 `backend` 目录单独建一个 repo 再连）。
+3. **指定根目录**：若仓库是整仓，在 Railway 里把 **Root Directory** 设为 `cs_agent_demo/backend`（或只把 `backend` 目录单独建一个 repo 再连）。后端会从 `backend/prompts.json` 加载提示词（与 `product_docs/prompts.json` 同步）；若修改了 `product_docs/prompts.json`，请同步更新 `backend/prompts.json`。
 4. **环境变量**：在 Service → Variables 里加 `OPENAI_API_KEY`、`OPENAI_API_BASE`（如 `https://openrouter.ai/api/v1`）、`OPENAI_MODEL`（如 `google/gemini-3.1-pro-preview`）、`PORT`（Railway 会注入，可不设）。
 5. **生成域名**：Settings → Networking → **Generate Domain**，得到 `xxx.railway.app`。
 6. **Zendesk**：Backend URL 填 `https://xxx.railway.app`（不要带尾部斜杠或 /health）。

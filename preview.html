@@ -97,8 +97,7 @@
 
     <div class="section reply-section">
       <h2>建议回复</h2>
-      <button id="btn-reply">生成回复</button>
-      <div id="reply-area" style="margin-top:10px;">
+      <div id="reply-area" style="margin-top:6px;">
         <textarea id="reply-text" placeholder="建议回复将显示在此…">Thank you for reaching out.
 
 We understand your concern and would like to help. Could you please provide your order ID so we can look into this for you?
@@ -134,7 +133,8 @@ Support Team</textarea>
     <div class="section">
       <h2>回复修改建议</h2>
       <label>提示词（可修改以调整语气、语言或政策侧重）</label>
-      <textarea placeholder="如：用英文专业回复；强调30天退换政策；日文工单用日语回复…" rows="3" style="min-height:56px; font-size:12px;"></textarea>
+      <textarea id="ai-prompt" placeholder="如：用英文专业回复；强调30天退换政策；日文工单用日语回复…" rows="3" style="min-height:56px; font-size:12px;"></textarea>
+      <button type="button" id="btn-reply-with-prompt" style="margin-top:8px;">生成回复</button>
     </div>
 
     <div class="section">
@@ -146,20 +146,21 @@ Support Team</textarea>
 
   <script>
     (function() {
-      var replyArea = document.getElementById('reply-area');
       var replyText = document.getElementById('reply-text');
       var replyError = document.getElementById('reply-error');
-      var btnReply = document.getElementById('btn-reply');
+      var btnReplyWithPrompt = document.getElementById('btn-reply-with-prompt');
+      var sampleReply = 'Thank you for reaching out.\n\nWe understand your concern and would like to help. Could you please provide your order ID so we can look into this for you?\n\nIf this is regarding a return or refund, we accept returns within 30 days of delivery. Refunds are processed within 5-7 business days after we receive the item.\n\nBest regards,\nSupport Team';
 
-      // 模拟「生成回复」
-      btnReply.onclick = function() {
+      // 模拟「回复修改建议」里的「生成回复」
+      btnReplyWithPrompt.onclick = function() {
         replyError.textContent = '';
-        btnReply.disabled = true;
+        btnReplyWithPrompt.disabled = true;
+        replyText.placeholder = '建议回复生成中…';
         replyText.value = '';
         setTimeout(function() {
-          replyText.value = 'Thank you for reaching out.\n\nWe understand your concern and would like to help. Could you please provide your order ID so we can look into this for you?\n\nIf this is regarding a return or refund, we accept returns within 30 days of delivery. Refunds are processed within 5-7 business days after we receive the item.\n\nBest regards,\nSupport Team';
-          replyArea.style.display = 'block';
-          btnReply.disabled = false;
+          replyText.value = sampleReply;
+          replyText.placeholder = '建议回复将显示在此…';
+          btnReplyWithPrompt.disabled = false;
         }, 600);
       };
 
