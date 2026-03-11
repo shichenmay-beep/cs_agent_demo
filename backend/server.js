@@ -375,6 +375,7 @@ ${conversationHistory}`;
 app.post('/evaluate-priority', async (req, res) => {
   try {
     const result = await evaluatePriorityWithLLM(req.body);
+    console.log('[priority] lang=', req.body.lang, 'reason(80)=', (result.reason || '').substring(0, 80));
     res.json(result);
   } catch (e) {
     res.status(500).json({ priority: 'P2', reason: '评估失败。' });
@@ -458,6 +459,7 @@ async function translateWithLLM(body) {
 app.post('/translate', async (req, res) => {
   try {
     const result = await translateWithLLM(req.body);
+    console.log('[translate] targetLang=', req.body.targetLang, 'translation(80)=', (result.translation || '').substring(0, 80));
     res.json(result);
   } catch (e) {
     res.status(500).json({ translation: (req.body.text || '').substring(0, 300) });
@@ -541,6 +543,7 @@ ${content}`;
 app.post('/summarize', async (req, res) => {
   try {
     const result = await summarizeWithLLM(req.body);
+    console.log('[summarize] lang=', req.body.lang, 'summary(80)=', (result.summary || '').substring(0, 80), 'points(80)=', (result.replyPoints || '').substring(0, 80));
     res.json(result);
   } catch (e) {
     res.status(500).json(mockSummarize(req.body));
